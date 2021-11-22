@@ -1,0 +1,69 @@
+pipeline{
+    agent any
+    tools{
+        maven 'maven_3.0.5'
+    }
+    stages{
+        stage('MSG'){
+            steps{
+                echo 'welcome to jenkins pipe line job'
+            }
+        }
+        stage('checkout'){
+            steps{
+                echo 'checkout started'
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[credentialsId: 'narasimha.git', url: 'https://github.com/narasimharaovepuri/git-github2.git']]])
+                echo 'checkout completed'
+            }
+        }
+        stage('BUILD'){
+            steps{
+                sh 'mvn package -f pom.xml'
+            }
+        }
+        stage('stage env deployment'){
+            steps{
+                deploy adapters: [tomcat9(credentialsId: 'tomcat9', path: '', url: 'http://34.125.139.242:8080')], contextPath: null, war: 'target/safeway.war'
+            }
+        }
+        stage('approval for nexus repo'){
+            steps{
+                echo "taking approval from manager for deploying artifacts to nexusrepo"
+                timeout(time: 7, unit: 'DAYS'){
+                    input message: 'DO YOU WANT WAR TO NEXUS REPO?', submitter: 'vepuri180'
+                }
+            }
+        }
+        stage('artifact to nexus repo'){
+            steps{
+                nexusArtifactUploader artifacts: [[artifactId: 'safeway', classifier: '', file: 'target/safeway.war', type: 'war']], credentialsId: 'Nexus', groupId: 'com.tcs', nexusUrl: '34.125.139.242:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'GCP-DEVOPS', version: '1.0-SNAPSHOT'
+            }
+        }
+        stage('approval for pre-prod deployment'){
+            steps{
+                echo 'taking approval from manager to deploy in pre-prod env'
+                timeout(time: 7, unit: 'DAYS'){
+                    input message: 'DO YOU WANT TO DEPLOY SAFEWAY.WAR IN pre-prod env?',submitter: 'vepuri180'
+                }
+            }
+        }
+        stage('pre-prod env deployment'){
+            steps{
+                deploy adapters: [tomcat9(credentialsId: 'tomcat9', path: '', url: 'http://34.125.213.206:8090')], contextPath: null, war: 'target/safeway.war'
+            }
+        }
+        stage('approval for prod deployment'){
+            steps{
+                echo 'taking approval from manager to deploy in prod env'
+                timeout(time: 7, unit: 'DAYS'){
+                    input message: 'do you want to deploy war in prod env?',submitter: 'vepuri180'
+                }
+            } 
+        }
+        stage('prod deployment'){
+            steps{
+                deploy adapters: [tomcat9(credentialsId: 'tomcat9', path: '', url: 'http://34.125.117.97:8080')], contextPath: null, war: 'target/safeway.war'
+            }
+        }
+    }
+}
